@@ -41,9 +41,10 @@ const (
 
 // Change below variables to serve metrics on different host or port.
 var (
-	metricsHost               = "0.0.0.0"
-	metricsPort         int32 = 8383
-	operatorMetricsPort int32 = 8686
+	leaderElectionResourceLock string
+	metricsHost                      = "0.0.0.0"
+	metricsPort                int32 = 8383
+	operatorMetricsPort        int32 = 8686
 )
 var log = logf.Log.WithName("cmd")
 
@@ -62,6 +63,13 @@ func main() {
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+
+	// The controller-runtime LeaderElectionResourceLock determines which resource lock to use
+	// for leader election, defaults to "configmapsleases". That setting will acquire a resource
+	// lock on both ConfigMap and Lease resource types. Older versions of kubernetes (like 1.13)
+	// do not support the Lease resource type. This flag allows the resource lock type to be
+	// set to other options (ex: configmaps) to suppport older kubernetes versions.
+	pflag.CommandLine.StringVar(&leaderElectionResourceLock, "leader-election-resource-lock", "configmapsleases", "leader election resource lock")
 
 	pflag.Parse()
 
@@ -107,12 +115,13 @@ func main() {
 
 	// Set default manager options
 	options := manager.Options{
-		Namespace:               namespace,
-		MetricsBindAddress:      fmt.Sprintf("%s:%d", metricsHost, metricsPort),
-		GracefulShutdownTimeout: &gracefulShutdownTimeout,
-		LeaderElection:          true,
-		LeaderElectionNamespace: namespace,
-		LeaderElectionID:        "pulumi-kubernetes-operator-lock",
+		Namespace:                  namespace,
+		MetricsBindAddress:         fmt.Sprintf("%s:%d", metricsHost, metricsPort),
+		GracefulShutdownTimeout:    &gracefulShutdownTimeout,
+		LeaderElection:             true,
+		LeaderElectionResourceLock: leaderElectionResourceLock,
+		LeaderElectionNamespace:    namespace,
+		LeaderElectionID:           "pulumi-kubernetes-operator-lock",
 	}
 
 	// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)

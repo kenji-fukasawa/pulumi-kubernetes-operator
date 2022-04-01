@@ -1095,17 +1095,31 @@ func (sess *reconcileStackSession) addDefaultPermalink(stack *pulumiv1.Stack) er
 	// Get stack URL.
 	info, err := sess.autoStack.Info(context.Background())
 	if err != nil {
-		sess.logger.Error(err, "Failed to update Stack status with default permalink", "Stack.Name", stack.Spec.Stack)
+		sess.logger.Error(err, "Failed to update Stack status with default permalink 1", "Stack.Name", stack.Spec.Stack)
 		return err
 	}
 	// Set stack URL.
 	if stack.Status.LastUpdate == nil {
+		sess.logger.Debug("LastUpdate was nil")
 		stack.Status.LastUpdate = &shared.StackUpdateState{}
+
+		// On older versions of kubernetes (like 1.13) an empty value for LastResyncTime
+		// will cause a validation error when attempting to set the initial status.
+		//
+		// status.lastUpdate.lastResyncTime in body must be of type string: "null"
+		//
+		// Setting that field to a non-empty value that is sufficiently in the past is
+		// done to avoid triggering the validation error.
+		timeInPast, err := time.Parse("2006-Jan-02", "1970-Jan-01")
+		if err != nil {
+			return err
+		}
+		stack.Status.LastUpdate.LastResyncTime = metav1.Time{Time: timeInPast}
 	}
 	stack.Status.LastUpdate.Permalink = shared.Permalink(info.URL)
 	err = sess.updateResourceStatus(stack)
 	if err != nil {
-		sess.logger.Error(err, "Failed to update Stack status with default permalink", "Stack.Name", stack.Spec.Stack)
+		sess.logger.Error(err, "Failed to update Stack status with default permalink 2", "Stack.Name", stack.Spec.Stack)
 		return err
 	}
 	sess.logger.Debug("Successfully updated Stack with default permalink", "Stack.Name", stack.Spec.Stack)
